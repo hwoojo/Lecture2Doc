@@ -6,6 +6,7 @@ never expose a partially written chunk as valid data.
 """
 import os
 from pathlib import Path
+import zipfile
 
 import numpy as np
 
@@ -54,7 +55,6 @@ def load_feature_observations(root, frames, config):
     folder = feature_cache_dir(root, frames, config)
     ink_chunks, mask_chunks, sharp_chunks = [], [], []
     expected_shape = None
-    pixel_count = None
 
     for start in range(0, len(frames), FEATURE_CHUNK_SIZE):
         path = folder / f"features-{start:06d}.npz"
@@ -71,7 +71,7 @@ def load_feature_observations(root, frames, config):
                 mask = np.asarray(data["mask"], dtype=np.uint8)
                 sharp = np.asarray(data["sharp"], dtype=np.float32)
                 shape = tuple(int(value) for value in data["shape"].tolist())
-        except (OSError, ValueError, KeyError, EOFError):
+        except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile):
             return None
 
         if len(shape) != 2 or min(shape) <= 0:
@@ -90,7 +90,6 @@ def load_feature_observations(root, frames, config):
             return None
 
         expected_shape = shape
-        pixel_count = count
         ink_chunks.append(ink.copy())
         mask_chunks.append(mask.copy())
         sharp_chunks.append(sharp.copy())
