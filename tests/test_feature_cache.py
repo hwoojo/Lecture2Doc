@@ -58,6 +58,4 @@ def test_pages_reuse_features_computed_during_analysis(tmp_path, monkeypatch):
     assert np.array_equal(result["ink"], np.asarray(expected_ink))
     assert np.array_equal(result["mask"], np.asarray(expected_mask))
     assert np.allclose(result["sharp"], np.asarray(expected_sharp, dtype=np.float32))
-    assert result["shape"] == expected_ink[0].shape[0] * (8,), (
-        "packed arrays should be retained alongside the two-dimensional image shape"
-    )
+    assert result["shape"] == small(images[0], config).shape[:2]
