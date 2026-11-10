@@ -5,6 +5,12 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
+from .feature_cache import (
+    FEATURE_CHUNK_SIZE,
+    feature_cache_dir,
+    write_feature_chunk,
+)
+
 
 @dataclass
 class Config:
@@ -251,6 +257,30 @@ def analyze(root, frames, config, duration):
     previous_foreground = None
     observations = {}
     shape = None
+
+    # Persist the measurements already computed by A so page grouping can
+    # reuse them instead of running measure_features() over every frame again.
+    feature_folder = feature_cache_dir(root, frames, config)
+    feature_folder.mkdir(parents=True, exist_ok=True)
+    feature_inks, feature_masks, feature_sharpness = [], [], []
+    feature_start = 0
+
+    def flush_feature_chunk():
+        nonlocal feature_start
+        if not feature_inks:
+            return
+        write_feature_chunk(
+            feature_folder,
+            feature_start,
+            feature_inks,
+            feature_masks,
+            feature_sharpness,
+            shape,
+        )
+        feature_start += len(feature_inks)
+        feature_inks.clear()
+        feature_masks.clear()
+        feature_sharpness.clear()
     known = reference = streak = None
     pending_start = None
     state_start = scene = 0
@@ -283,7 +313,15 @@ def analyze(root, frames, config, duration):
         measured = measure_features(image, config.board)
         ink, foreground, kind = measured["ink"], measured["foreground"], measured["board"]
         shape = ink.shape
-        observations[f["id"]] = (np.packbits(ink), np.packbits(foreground))
+        packed_ink = np.packbits(ink)
+        packed_foreground = np.packbits(foreground)
+        observations[f["id"]] = (packed_ink, packed_foreground)
+        feature_inks.append(packed_ink)
+        feature_masks.append(packed_foreground)
+        feature_sharpness.append(measured["ink_sharpness"])
+        if len(feature_inks) >= FEATURE_CHUNK_SIZE or i + 1 == len(frames):
+            flush_feature_chunk()
+
         cut, distribution = cut_score(previous, image) if previous is not None else (0., 0.)
         moving, camera = camera_evidence(previous, image, previous_foreground, foreground) if previous is not None else (False, dict(phase=[0,0,1], verified=True, reason="initial"))
         motion = float((np.max(np.abs(image.astype(float)-previous), axis=2) > 20).mean()) if previous is not None else 0.

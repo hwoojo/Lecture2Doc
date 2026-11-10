@@ -10,6 +10,7 @@ from .transcript import transcribe
 from .vision import Config, analyze
 from .pages import build_pages
 from .page_restore import restore_pages
+from .learning_analysis import build_learning_analysis
 
 
 def process(video, root, config=None, subtitles=None, model=None, language=None,
@@ -158,8 +159,23 @@ def process(video, root, config=None, subtitles=None, model=None, language=None,
             result["ocr"] = dict(status="failed", language=ocr_language, pages=[], message=f"{type(exc).__name__}: {exc}")
         timings["ocr"] = dict(elapsed_seconds=round(time.monotonic()-ocr_started, 3),
                               status=result["ocr"]["status"], cache_hits=result["ocr"].get("cache_hits", 0))
+    report("강의 중요도와 개념 등장 시간 분석")
+    learning_started = time.monotonic()
+    try:
+        result["learning_analysis"] = build_learning_analysis(
+            root, result, force="learning-analysis" in rerun
+        )
+    except Exception as exc:
+        result["learning_analysis"] = dict(
+            status="failed", method="evidence_rules", pages=[], concepts=[],
+            message=f"{type(exc).__name__}: {exc}",
+        )
+    timings["learning_analysis"] = dict(
+        elapsed_seconds=round(time.monotonic()-learning_started, 3),
+        status=result["learning_analysis"]["status"],
+    )
     result.update(product_version="V1", timings=timings, elapsed_seconds=round(time.monotonic()-started, 3),
-                  elapsed_scope="video_input_through_ocr_excluding_final_manifest_write")
+                  elapsed_scope="video_input_through_learning_analysis_excluding_final_manifest_write")
     write(root / "manifest.json", result)
     report("완료")
     return result

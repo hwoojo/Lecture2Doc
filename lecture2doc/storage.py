@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import time
 
-VERSION = "2026-11-02.quality-6"
+VERSION = "2026-11-09.shared-frame-features-1"
 MEDIA_VERSION = "2026-11-01.3"
 RECONSTRUCTION_VERSION = "2026-11-01.restoration-3"
 

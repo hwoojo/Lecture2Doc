@@ -2,14 +2,21 @@
 import cv2
 import numpy as np
 from .vision import small, measure_features
+from .feature_cache import load_feature_observations
 from .storage import write, read, key
 import os
 
-PAGE_VERSION = '2026-11-02.pages-17'
+PAGE_VERSION = '2026-11-09.pages-18-shared-features'
 
 
 def observations(root, folder, frames, config, progress=None):
-    """Checkpoint packed measurements, independently of page decision thresholds."""
+    """Load A's shared measurements, falling back to the legacy page cache."""
+    shared = load_feature_observations(root, frames, config)
+    if shared is not None:
+        if progress:
+            progress(f"공유 판서 특징 캐시 재사용 {len(frames)}/{len(frames)}")
+        return shared
+
     previous = folder
     folder = root / 'cache' / 'page-observations' / key([frames,config.board,config.analysis_width,config.roi], 'page-measurements-3')
     folder.mkdir(parents=True, exist_ok=True)

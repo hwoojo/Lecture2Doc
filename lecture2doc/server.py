@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .pipeline import process
-from .storage import key, read, write
+from .storage import digest, key, read, write
 from .vision import Config
 
 
@@ -38,6 +38,10 @@ class BoardSelection(BaseModel):
 
 class PurgeConfirmation(BaseModel):
     confirmed: bool = False
+
+
+class QwenReviewRequest(BaseModel):
+    board_page_id: str = Field(min_length=1, max_length=128)
 
 
 def create_app(data_dir=None, record_dir=None):
@@ -350,6 +354,149 @@ def create_app(data_dir=None, record_dir=None):
         if not p.exists():
             raise HTTPException(404, "분석 결과가 아직 없습니다")
         return visible_manifest(p.parent)
+
+    @app.post("/api/jobs/{job_id}/ocr")
+    def rerun_ocr(job_id: str):
+        with edit_lock:
+            folder = job_dir(job_id)
+            if active(job_id):
+                raise HTTPException(409, "강의 처리 중에는 OCR을 실행할 수 없습니다")
+            path = folder / "manifest.json"
+            if not path.is_file():
+                raise HTTPException(404, "분석 결과가 아직 없습니다")
+            manifest_data = read(path)
+            previous = manifest_data.get("ocr") or {}
+            language = previous.get("language") or manifest_data.get("config", {}).get("ocr_language") or "ko"
+            previous_pages = previous.get("pages") or []
+            previous_config = next(
+                (page.get("config") for page in previous_pages if page.get("config")),
+                {},
+            )
+            try:
+                from .ocr import OCRConfig, recognize_pages
+                config = OCRConfig(
+                    language=language,
+                    min_score=float(previous_config.get("min_score", 0.5)),
+                    review_score=float(previous_config.get("review_score", 0.75)),
+                    preprocessing=previous_config.get("preprocessing", "rgb"),
+                    threads=int(previous_config.get("threads", 4)),
+                ).validate()
+                started = time.monotonic()
+                result = recognize_pages(
+                    folder, manifest_data, config=config, progress=lambda message: None, force=True
+                )
+                manifest_data["ocr"] = result
+                manifest_data.setdefault("timings", {})["ocr"] = dict(
+                    elapsed_seconds=result.get("elapsed_seconds", round(time.monotonic() - started, 3)),
+                    status=result.get("status"),
+                    cache_hits=result.get("cache_hits", 0),
+                    inference_pages=result.get("inference_pages", 0),
+                )
+                write(path, manifest_data)
+            except Exception as exc:
+                raise HTTPException(500, f"OCR 재실행 실패: {type(exc).__name__}: {exc}")
+        first_page = next(iter(result.get("pages", [])), {})
+        recognizer = (first_page.get("engine") or {}).get("models", {}).get("rec")
+        return dict(
+            status="complete",
+            language=result.get("language"),
+            pages=len(result.get("pages", [])),
+            recognizer=recognizer,
+            elapsed_seconds=result.get("elapsed_seconds"),
+            message=f"OCR 재실행 완료 · {recognizer or '모델 정보 없음'}",
+        )
+
+    @app.post("/api/jobs/{job_id}/qwen-review")
+    def run_qwen_review(job_id: str, request: QwenReviewRequest):
+        with edit_lock:
+            folder = job_dir(job_id)
+            if active(job_id):
+                raise HTTPException(409, "강의 처리 중에는 Qwen 판서 재검토를 실행할 수 없습니다")
+            manifest_path = folder / "manifest.json"
+            if not manifest_path.is_file():
+                raise HTTPException(404, "분석 결과가 아직 없습니다")
+            manifest_data = read(manifest_path)
+            ocr_data = manifest_data.get("ocr") or {}
+            ocr_page = next(
+                (page for page in ocr_data.get("pages", [])
+                 if page.get("board_page_id") == request.board_page_id),
+                None,
+            )
+            if ocr_page is None:
+                raise HTTPException(404, "선택한 판서의 OCR 결과가 없습니다")
+            image_name = (ocr_page.get("input") or {}).get("image")
+            if not image_name:
+                raise HTTPException(404, "판서 원본 이미지 경로가 없습니다")
+            image_path = (folder / image_name).resolve()
+            if not image_path.is_relative_to(folder.resolve()) or not image_path.is_file():
+                raise HTTPException(404, "판서 이미지 파일을 찾을 수 없습니다")
+            try:
+                from .qwen_vision import QWEN_REVIEW_VERSION, review_board_image, selected_model
+                model_name = selected_model()
+                existing = ocr_page.get("qwen_review") or {}
+                if (
+                    existing.get("status") == "complete"
+                    and existing.get("version") == QWEN_REVIEW_VERSION
+                    and existing.get("model") == model_name
+                    and existing.get("source_sha256") == digest(image_path)
+                ):
+                    return dict(
+                        status="complete",
+                        board_page_id=request.board_page_id,
+                        model=model_name,
+                        blocks=len(existing.get("blocks", [])),
+                        elapsed_seconds=0,
+                        cached=True,
+                        message=f"기존 Qwen 결과 재사용 · {model_name}",
+                    )
+                started = time.monotonic()
+                result = review_board_image(
+                    image_path,
+                    ocr_regions=ocr_page.get("regions", []),
+                    model=model_name,
+                )
+            except Exception as exc:
+                raise HTTPException(500, f"Qwen 판서 재검토 실패: {type(exc).__name__}: {exc}")
+            ocr_page["qwen_review"] = result
+            manifest_data.setdefault("timings", {})["qwen_review"] = dict(
+                elapsed_seconds=round(time.monotonic() - started, 3),
+                status=result.get("status"),
+                model=result.get("model"),
+                board_page_id=request.board_page_id,
+            )
+            write(manifest_path, manifest_data)
+        return dict(
+            status="complete",
+            board_page_id=request.board_page_id,
+            model=result.get("model"),
+            blocks=len(result.get("blocks", [])),
+            elapsed_seconds=result.get("elapsed_seconds"),
+            message=f"Qwen 판서 재검토 완료 · {result.get('model')}",
+        )
+
+    @app.post("/api/jobs/{job_id}/learning-analysis")
+    def run_learning_analysis(job_id: str):
+        with edit_lock:
+            folder = job_dir(job_id)
+            if active(job_id):
+                raise HTTPException(409, "강의 처리 중에는 학습 분석을 실행할 수 없습니다")
+            path = folder / "manifest.json"
+            if not path.is_file():
+                raise HTTPException(404, "분석 결과가 아직 없습니다")
+            manifest_data = read(path)
+            started = time.monotonic()
+            try:
+                from .learning_analysis import build_learning_analysis
+                analysis = build_learning_analysis(folder, manifest_data, force=True)
+            except Exception as exc:
+                raise HTTPException(500, f"학습 분석 실패: {type(exc).__name__}: {exc}")
+            manifest_data["learning_analysis"] = analysis
+            manifest_data.setdefault("timings", {})["learning_analysis"] = dict(
+                elapsed_seconds=round(time.monotonic() - started, 3),
+                status=analysis["status"],
+            )
+            write(path, manifest_data)
+        return dict(status="complete", analysis_status=analysis["status"], message=analysis.get("message", ""))
 
     @app.get("/api/jobs/{job_id}/files/{name:path}")
     def files(job_id: str, name: str):

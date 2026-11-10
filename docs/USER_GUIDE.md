@@ -6,7 +6,7 @@
 
 각 누적 판서의 삭제·교체 전 원본을 고르는 A와, 실제 관측 영역을 합성하는 B를 구현했습니다. 최신 AccessMath 결과는 **Lecture 01 4장 / Lecture 02 16장 / Lecture 06 part 1 6장**입니다. 기존 계산 계약으로 A/B F1은 각각 **96.75 / 99.90 / 97.54%**이며, 정상 실행 26장은 원본을 유지했습니다. 별도 실제 가림 구간 8건 중 7건에서 필기 추가 노출을 확인했지만, 부분 인물·패치 경계가 남습니다. **C는 판서 OCR을 구현했습니다.** [V1 OCR 실행 결과](V1_OCR.md)를 함께 확인하세요. [최신 원인 분석·비교·한계](AB_REFINEMENT.md), [이미지·후보·출처 비교](../experiments/ab-refinement/review/index.html)를 확인하세요. 이전 [A 보고서](BOARD_PAGES.md), [B 보고서](PAGE_RESTORATION.md), [세부 상태 진단](QUALITY_IMPROVEMENT.md)과 실험 파일은 기준선으로 보존합니다.
 
-강의 영상의 판서와 발언을 **원본으로 확인할 수 있게 기록하는 로컬 웹 앱**입니다. 외부 계정, API 키, CUDA, LLM/VLM은 필요하지 않습니다.
+강의 영상의 판서와 발언을 **원본으로 확인할 수 있게 기록하는 로컬 웹 앱**입니다. 기본 A/B/C 처리에는 외부 계정, API 키, CUDA, LLM/VLM이 필요하지 않습니다. Qwen 기반 판서 재검토와 AI 개념 선별은 Ollama와 로컬 Qwen 모델을 설치한 경우 선택적으로 실행됩니다.
 
 **V1은 A(누적 판서 선택) + B(관측 기반 복원) + C(OCR)**입니다. C는 판서의 문자를 읽어 텍스트·영역 좌표·원본 crop을 저장하며 웹에서 확인·복사할 수 있습니다. 수식→LaTeX는 후속 목표로 남깁니다. 전사 보정·강의 노트·편집·통합 검색은 D로 분리합니다. [단계별 범위](ROADMAP.md), [V1 OCR 실행 보고서](V1_OCR.md)를 확인하세요.
 
@@ -32,7 +32,7 @@ lecture2doc ocr-models --language en
 lecture2doc serve
 ```
 
-[http://127.0.0.1:8765](http://127.0.0.1:8765)에서 영상을 등록합니다. 기존 SRT/VTT/JSON 자막을 넣거나 분석 설정에서 Whisper 모델을 지정할 수 있습니다. 한글 OCR 모델은 `lecture2doc ocr-models --language ko`로 준비합니다. 음성 전사가 필요하면 `python -m pip install -e '.[stt]'`를 추가로 실행한 뒤 첫 다운로드를 허용합니다. 모델 파일은 각자 저장소의 `models/`에 쌓이며 이후에는 네트워크 없이 사용합니다. 로컬 CTranslate2 모델 폴더도 지정할 수 있습니다.
+[http://127.0.0.1:8765](http://127.0.0.1:8765)에서 영상을 등록합니다. 기존 SRT/VTT/JSON 자막을 넣거나 분석 설정에서 Whisper 모델을 지정할 수 있습니다. 한글·영문이 섞인 판서의 기본 OCR은 PP-OCRv5 Korean Mobile입니다. `lecture2doc ocr-models --language ko`를 실행하면 기본 모델과 선택 실험용 한국어 손글씨 모델을 함께 준비합니다. 손글씨 모델은 `LECTURE2DOC_KO_RECOGNIZER=handwriting`을 설정한 경우에만 선택됩니다. 음성 전사가 필요하면 `python -m pip install -e '.[stt]'`를 추가로 실행한 뒤 첫 다운로드를 허용합니다. 모델 파일은 각자 저장소의 `models/`에 쌓이며 이후에는 네트워크 없이 사용합니다. 로컬 CTranslate2 모델 폴더도 지정할 수 있습니다.
 
 Whisper 모델은 첫 실행에서 내려받을 수 있습니다. 예를 들어 `lecture2doc process lecture.mp4 --out data/my-lecture --model base --language ko --allow-download`는 모델을 `models/whisper/base/`에 저장합니다. 웹 화면에서도 전사 설정에서 모델을 지정하고 첫 다운로드를 허용할 수 있습니다. 다른 저장 위치는 `LECTURE2DOC_WHISPER_MODELS`로 바꿀 수 있습니다.
 
@@ -83,13 +83,38 @@ lecture2doc ocr experiments/ab-refinement/accepted/lecture01 \
 lecture2doc process lecture.mp4 --out data/my-v1 --ocr ko
 
 # 기존 V1의 OCR 재실행 / 전처리 비교
+lecture2doc ocr-models --language ko
 lecture2doc ocr data/my-v1 --language ko --rerun
 lecture2doc ocr data/my-v1 --language ko --preprocessing adaptive
 ```
 
 각 실행의 전체 시간과 단계별 캐시 사용 여부는 `manifest.json`의 `elapsed_seconds`, `timings`에 기록합니다. 기존 기록에 OCR만 추가하면 이번 시간은 `ocr.elapsed_seconds`로 따로 남깁니다. [실제 실행 시간](V1_OCR.md)을 참고하세요.
 
-OCR은 `.[ocr]` 선택 설치와 `lecture2doc ocr-models --language en` 또는 `--language ko` 모델 다운로드가 필요합니다. 기본 모델 위치는 `models/ocr`, 다른 위치는 `LECTURE2DOC_OCR_MODELS`로 지정합니다. CLI 새 영상 처리는 기본 영문 OCR이며 `--ocr off`로 생략합니다. 웹 등록에서 언어를 선택할 수 있습니다. OCR 실패 시 A/B 결과와 오류 메시지를 보존합니다.
+OCR은 `.[ocr]` 선택 설치와 `lecture2doc ocr-models --language en` 또는 `--language ko` 모델 다운로드가 필요합니다. OCR 모델 선택을 바꾼 뒤에는 기존 강의의 C · 판서 텍스트에서 **OCR 다시 실행**을 누르거나 CLI에서 `--rerun`으로 다시 생성해야 합니다. 결과 상태 줄에 실제 인식기 이름이 표시됩니다. 기본 모델 위치는 `models/ocr`, 다른 위치는 `LECTURE2DOC_OCR_MODELS`로 지정합니다. CLI 새 영상 처리는 기본 영문 OCR이며 `--ocr off`로 생략합니다. 웹 등록에서 언어를 선택할 수 있습니다. OCR 실패 시 A/B 결과와 오류 메시지를 보존합니다.
+
+### 전체 필수 모델 한 번에 준비
+
+OCR과 Qwen 모델을 한 번에 내려받으려면 Ollama 앱을 설치하고 실행한 뒤 저장소 루트에서 다음 명령을 실행합니다.
+
+```bash
+lecture2doc setup-models
+```
+
+이 명령은 영문·한글 OCR 모델을 모두 준비한 다음 Mac 메모리에 맞는 Qwen 비전 모델을 내려받습니다. 기본 Qwen 자동 선택은 32GB 이상 Apple Silicon에서 최신 Qwen3.8-27B MLX, 24GB 이상에서 8B, 16GB 이상 24GB 미만에서 4B, 16GB 미만에서 2B를 사용합니다. Ollama 버전이나 연결 상태를 먼저 검사하므로 조건을 만족하지 않으면 모델 다운로드를 시작하지 않습니다.
+
+기존처럼 모델을 개별 설치할 수도 있습니다. OCR은 `lecture2doc ocr-models --language ko`, Qwen은 `lecture2doc qwen-models`를 사용합니다.
+
+### 로컬 Qwen Vision 설치와 사용
+
+Qwen으로 판서 이미지를 재검토하고 핵심 개념을 선별하려면 Ollama 앱을 설치하고 실행합니다. `lecture2doc qwen-models`는 Mac 메모리를 감지해 최신 Qwen3.8-27B MLX 또는 기기 메모리에 따라 Qwen3-VL 8B/4B/2B를 자동 선택합니다. Qwen3.8-27B는 약 18GB 다운로드와 Ollama 0.40.0 이상이 필요합니다.
+
+```bash
+lecture2doc qwen-models
+```
+
+기존 강의에서 C · 판서 텍스트의 **Qwen 판서 재검토**를 누르면 선택된 판서 이미지와 OCR 후보를 로컬 모델이 다시 읽습니다. Qwen 결과는 기존 OCR을 덮어쓰지 않고 별도 영역에 저장합니다. D · 학습 분석의 **분석 다시 실행**도 동일한 Qwen 모델을 사용해 주제 핵심 개념을 최대 5개 선별합니다.
+
+모델 목록은 `lecture2doc qwen-models --list`, 설치 여부는 `lecture2doc qwen-models --check`로 확인합니다. 최신 모델을 강제하려면 `lecture2doc qwen-models --profile latest`, 8B 균형형은 `--profile balanced`, 4B 저메모리 모델은 `--profile compact`, 2B 초저메모리 모델은 `--profile ultra-compact`를 사용합니다. 모델을 바꾼 뒤에는 서버 실행 전에 `LECTURE2DOC_QWEN_MODEL` 환경 변수를 지정하고 해당 모델을 내려받습니다. Qwen 추론은 로컬 Ollama에서만 실행되므로 API 키나 외부 AI 토큰 비용이 필요하지 않습니다. 최초 다운로드에는 인터넷이 필요합니다. [자세한 안내](QWEN_LOCAL.md)
 
 B 결과가 있으면 B를, 없으면 A를 읽습니다. 텍스트를 눌러 고치는 기능·통합 검색은 D에서 다룹니다. OCR에 수식이 문자열로 나타날 수 있지만 LaTeX로 변환하지 않습니다.
 
@@ -142,6 +167,31 @@ B 결과가 있으면 B를, 없으면 A를 읽습니다. 텍스트를 눌러 고
 ```
 
 입력 SHA-256·설정·알고리즘 버전으로 캐시를 분리합니다. 자막 내용이나 로컬 모델 파일이 바뀌면 전사 캐시가 달라집니다. `--rerun`은 이전 캐시를 삭제하지 않습니다. 다른 영상을 같은 결과 폴더에 넣으면 거부합니다. 디스크 절약을 위한 자동 원본 삭제 기능은 없습니다. 기본 0.5초 PNG 추출은 장시간 1080p 영상에서 많은 저장 공간과 디코딩 시간이 필요합니다.
+
+### 기본·실험 OCR 모델 선택
+
+기본값은 한국어와 영어 혼합 텍스트용 PP-OCRv5 Korean Mobile입니다. 손글씨 특화 모델을 비교하려면 서버 실행 전에 다음을 설정합니다.
+
+```bash
+export LECTURE2DOC_KO_RECOGNIZER=handwriting
+```
+
+기본 모델로 돌아가려면 다음을 실행합니다.
+
+```bash
+unset LECTURE2DOC_KO_RECOGNIZER
+```
+
+설정 변경 후 서버를 재시작하고 OCR을 다시 실행해야 합니다.
+
+### 기존 강의의 OCR만 다시 실행
+
+1. `lecture2doc ocr-models --language ko`로 새 모델을 준비합니다.
+2. 서버를 종료하고 다시 실행합니다.
+3. 기존 강의의 **C · 판서 텍스트**에서 **OCR 다시 실행**을 누릅니다.
+4. 기본 모델을 사용했다면 상태에 `korean-PP-OCRv5-mobile`이 표시되는지 확인합니다. 실험 손글씨 모델을 선택한 경우에만 `korean-handwriting-rec`이 표시됩니다.
+
+이 기능은 저장된 A/B 판서 이미지를 다시 읽습니다. 영상 프레임 추출·A/B 복원·음성 전사는 다시 실행하지 않습니다. 이전 OCR 파일은 캐시에 남고 새 결과만 manifest에 연결됩니다.
 
 ## 검증과 재현
 

@@ -4,7 +4,7 @@
 
 ## 구현한 기능
 
-- CPU 로컬 OCR: RapidOCR 3.10.0 / ONNX Runtime. 검출은 PP-OCRv6 small, 영문 인식은 v6 medium, 한글·영문 인식은 Korean PP-OCRv5 mobile.
+- CPU 로컬 OCR: RapidOCR 3.10.0 / ONNX Runtime. 검출은 PP-OCRv6 small, 영문 인식은 PP-OCRv6 medium, 한글·영문 인식은 PP-OCRv5 Korean Mobile을 기본으로 사용.
 - B 이미지가 있으면 B를 읽고, 없으면 A를 읽는다. 분석용 축소 마스크가 아닌 원본 해상도 이미지를 사용한다.
 - 사용자 ROI를 적용하고 결과 좌표는 전체 이미지의 원본 픽셀 좌표로 돌려 저장한다.
 - 문장별 텍스트·모델 점수·polygon/bbox·원본 crop과 판서 ID, 입력 이미지 해시, 근거 프레임 ID·시각, B 영역별 출처 JSON을 연결한다.
@@ -71,7 +71,15 @@ Lecture 01·02의 네 판서에서 문장·라벨 **26곳**을 골라 원본을 
 
 적응 이진화는 첫 판서의 긴 질문을 놓치고 다른 문구의 오류도 늘렸다. **RGB를 기본으로 유지**하고 이진화는 CLI 비교 옵션으로 제공한다. 현재 OCR의 핵심 개선점은 긴 흘림체 문장과 줄 누락이다.
 
-한글 모델은 다운로드·해시 확인 후 실제 Lecture 02 이미지에서 실행해 6개 영역 출력을 확인했다. [실행 기록](../experiments/v1/korean-engine-smoke.json). 입력이 영문이므로 한글 정확도 평가는 한글 판서 표본을 확보한 뒤 진행한다.
+이전 한글 모델은 다운로드·해시 확인 후 실행해 6개 영역 출력을 확인했다. 초기 손글씨 인식기 기본 적용은 실제 칠판 영상에서 영어 혼합 판서가 악화되는 문제가 확인되어 기본값에서 제외했다. 현재 기본값은 한국어·영어를 지원하는 PP-OCRv5 Korean Mobile이고, `korean-handwriting-rec`는 환경 변수로 선택하는 실험 모델이다. PP-OCRv6 영역 탐지와 원본 좌표·crop 저장 구조는 유지한다.
+
+## 2026-11-10 한국어 손글씨 인식기 비교 모델 추가 및 기본값 복구
+
+- 한국어 손글씨 모델 `korean-handwriting-rec`를 비교용으로 추가하고 모델 출처·Apache-2.0 라이선스·파일 해시를 `models/ocr/ko.json`에 기록하도록 했다.
+- 기본 인식기는 PP-OCRv5 Korean Mobile로 복구했으며, 실험 모델은 `LECTURE2DOC_KO_RECOGNIZER=handwriting`으로만 선택한다.
+- OCR 알고리즘 버전을 올려 모델 선택이 달라지면 이전 인식 결과 캐시를 재사용하지 않는다.
+- 모델은 종이 손글씨 데이터에서 높은 결과를 보고했지만 칠판·분필·수식에 대한 검증은 아직 수행하지 않았다. [모델 평가와 PaddleOCR-VL 검토](OCR_MODEL_EVALUATION.md)를 참고한다.
+- `tests/test_ocr.py`에 기본 모델 다운로드, 실험 모델 다운로드, 기본값·선택값 전환을 확인하는 테스트를 추가했다. 이 대화에서 테스트를 실제 실행하지는 않았으므로 Mac에서 `python -m pytest tests/test_ocr.py -q`로 확인해야 한다.
 
 ## 자동 검증과 연결 확인
 

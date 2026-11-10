@@ -26,3 +26,5 @@ models/whisper/
 models/whisper/*
 !models/whisper/index.json
 
+
+models/qwen/

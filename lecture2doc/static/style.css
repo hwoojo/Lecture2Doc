@@ -9,3 +9,49 @@
 #library{grid-template-columns:minmax(300px,440px) minmax(300px,1fr);gap:36px;max-width:1400px;align-items:start}.library-list{grid-column:auto;border-top:0;padding-top:0}header{height:64px}main{padding-top:30px}.elapsed-time{display:block;font-variant-numeric:tabular-nums;color:var(--green);margin-top:4px}.elapsed-time:empty{display:none}#upload-status>span{display:block}@media(max-width:800px){#library{grid-template-columns:1fr}.library-list{grid-column:auto}}
 
 dialog{max-width:480px;width:calc(100vw - 40px);padding:0;border:1px solid var(--line);border-radius:12px;color:var(--ink)}dialog::backdrop{background:#19312e66}dialog form{border:0;box-shadow:none;margin:0;padding:26px}dialog p{font-size:14px;overflow-wrap:anywhere}.dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
+
+.learning-panel{margin-top:30px;padding:22px;background:#fff;border:1px solid var(--line);border-radius:12px}
+.learning-heading{display:flex;align-items:center;justify-content:space-between;gap:15px}
+.learning-heading h2{margin:2px 0 8px;font-size:20px}
+.learning-heading .eyebrow{margin:0}
+.learning-grid{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(300px,1.1fr);gap:24px;margin-top:20px}
+.learning-grid h3{font-size:14px;margin:0 0 10px}
+.learning-card{padding:12px 0;border-top:1px solid var(--line)}
+.learning-card-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.learning-card-heading strong{font-size:13px;overflow-wrap:anywhere}
+.importance-value{font-size:11px;color:var(--green);white-space:nowrap;font-variant-numeric:tabular-nums}
+.learning-card progress{display:block;width:100%;height:7px;margin:8px 0;accent-color:var(--green)}
+.learning-card .hint{margin:6px 0 0;line-height:1.5}
+.learning-time-button{display:flex;flex-wrap:wrap;align-items:center;gap:6px;width:100%;text-align:left;margin-top:7px;padding:7px 9px;font-size:11px;background:#f8faf6}
+.learning-time-button small{display:block;flex-basis:100%;color:var(--muted);white-space:normal;overflow-wrap:anywhere}
+
+
+
+@media(max-width:800px){.learning-grid{grid-template-columns:1fr}.learning-panel{padding:16px}.learning-heading{align-items:flex-start;flex-direction:column}}
+
+/* 학습 분석은 판서·영상 작업 영역 아래에 독립된 전체 폭으로 표시합니다. */
+.learning-panel{clear:both}
+.learning-message{max-width:900px;line-height:1.6}
+
+.learning-preview-label{font-size:11px;color:var(--muted);margin:10px 0 5px}
+.learning-preview-video{display:block;width:100%;max-width:320px;aspect-ratio:16/9;height:auto;object-fit:contain;background:#101512;border:1px solid var(--line);border-radius:9px}
+@media(max-width:800px){.learning-preview-video{max-width:100%}}
+
+#ocr-rerun{margin-left:auto;white-space:nowrap;font-size:11px;padding:7px 10px}
+#ocr-rerun:disabled{opacity:.55;cursor:wait}
+
+.ocr-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#qwen-review{font-size:11px;white-space:nowrap;padding:7px 10px}
+#qwen-review:disabled{opacity:.55;cursor:wait}
+.qwen-review-box{margin:14px 0;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.qwen-review-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.qwen-review-heading h3{margin:0;font-size:14px}
+.qwen-review-heading small,.qwen-review-block small{color:var(--muted);font-size:11px}
+.qwen-review-text{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.7;margin:0 0 10px}
+.qwen-review-block{padding:9px 0;border-top:1px solid var(--line)}
+.qwen-review-block p{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.qwen-block-kind{font-size:10px;color:var(--accent);font-weight:700}
+.qwen-latex{display:block;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px}
+.qwen-unreadable{padding:9px;background:var(--surface-muted);border-radius:8px}
+.qwen-unreadable p{margin:5px 0;font-size:12px}
+@media(max-width:640px){.ocr-heading{align-items:flex-start}.qwen-review-heading{display:block}.qwen-review-heading small{display:block;margin-top:4px}}
